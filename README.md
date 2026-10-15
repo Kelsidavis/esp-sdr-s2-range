@@ -1,5 +1,10 @@
 # ESP-SDR firmware
 
+> **This fork** adds ESP32-S2 extras on top of upstream `e2b35dc`: an LCD
+> spectrum/waterfall for the Adafruit ESP32-S2 TFT Feather, `PLL?`/`LOMODE`
+> tuning diagnostics, and an opt-in shielded-test tone source. Measured S2
+> tuning limits and the test tools are in [tools/s2-range](tools/s2-range/README.md).
+
 <img src="docs/espargos-logo.png" width="40%" align="right" alt="ESPARGOS logo">
 
 ### Try it yourself: [Project overview](https://espargos.net/espsdr/) · [Browser SDR viewer](https://espargos.net/espsdr/app/) · [Browser firmware installer](https://espargos.net/espsdr/app/flash.html)

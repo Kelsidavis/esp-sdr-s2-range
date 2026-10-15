@@ -1,0 +1,114 @@
+[
+ {
+  "tx_lo": 2294,
+  "rx_lo": 2294,
+  "mode": "AUTO",
+  "expected_offset_hz": 4264784.0,
+  "tx": [
+   {
+    "start": "TONESTART 2298264784 12000 16",
+    "end": "TONEEND 200 0 301"
+   },
+   {
+    "start": "TONESTART 2298264784 12000 16",
+    "end": "TONEEND 200 0 301"
+   },
+   {
+    "start": "TONESTART 2298264784 12000 16",
+    "end": "TONEEND 200 0 301"
+   }
+  ],
+  "tx_pll": {
+   "searched": 1,
+   "ok": 1,
+   "best": 2,
+   "cap": 216,
+   "first": 215,
+   "last": 216,
+   "good": 2,
+   "f4": 215,
+   "f8": 295,
+   "status": 2,
+   "now": 2,
+   "div": 0
+  },
+  "rx_pll": {
+   "searched": 1,
+   "ok": 1,
+   "best": 3,
+   "cap": 291,
+   "first": 290,
+   "last": 292,
+   "good": 3,
+   "f4": 290,
+   "f8": 219,
+   "status": 1,
+   "now": 1,
+   "div": 0
+  },
+  "on_captures": 15,
+  "off_captures": 20,
+  "hits": 1,
+  "confirmed": false,
+  "best_rise_db": 23.655067254853797,
+  "hit_offsets_hz": [
+   -4332139
+  ]
+ },
+ {
+  "tx_lo": 2294,
+  "rx_lo": 2293,
+  "mode": "AUTO",
+  "expected_offset_hz": 5264784.0,
+  "tx": [
+   {
+    "start": "TONESTART 2298264784 12000 16",
+    "end": "TONEEND 200 0 301"
+   },
+   {
+    "start": "TONESTART 2298264784 12000 16",
+    "end": "TONEEND 200 0 301"
+   },
+   {
+    "start": "TONESTART 2298264784 12000 16",
+    "end": "TONEEND 200 0 301"
+   }
+  ],
+  "tx_pll": {
+   "searched": 1,
+   "ok": 1,
+   "best": 2,
+   "cap": 216,
+   "first": 215,
+   "last": 216,
+   "good": 2,
+   "f4": 215,
+   "f8": 295,
+   "status": 2,
+   "now": 2,
+   "div": 0
+  },
+  "rx_pll": {
+   "searched": 1,
+   "ok": 1,
+   "best": 3,
+   "cap": 292,
+   "first": 291,
+   "last": 293,
+   "good": 3,
+   "f4": 291,
+   "f8": 218,
+   "status": 1,
+   "now": 1,
+   "div": 0
+  },
+  "on_captures": 15,
+  "off_captures": 20,
+  "hits": 1,
+  "confirmed": false,
+  "best_rise_db": 54.41449512343757,
+  "hit_offsets_hz": [
+   -5331162
+  ]
+ }
+]
