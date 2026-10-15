@@ -4,6 +4,10 @@
 > spectrum/waterfall for the Adafruit ESP32-S2 TFT Feather, `PLL?`/`LOMODE`
 > tuning diagnostics, and an opt-in shielded-test tone source. Measured S2
 > tuning limits and the test tools are in [tools/s2-range](tools/s2-range/README.md).
+>
+> **Demo video:** [youtu.be/4-PmwZf8XUA](https://youtu.be/4-PmwZf8XUA)
+>
+> [![ESP32-S2 Feather SDR demo](https://img.youtube.com/vi/4-PmwZf8XUA/hqdefault.jpg)](https://youtu.be/4-PmwZf8XUA)
 
 <img src="docs/espargos-logo.png" width="40%" align="right" alt="ESPARGOS logo">
 
