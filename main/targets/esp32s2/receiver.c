@@ -28,8 +28,12 @@
 #include "pll.h"
 #ifdef ESP_SDR_FEATHER_TFT
 #include "feather_tft.h"
-static unsigned lcd_rate=1;
-static uint8_t lcd_bins[256];
+/* Spans up to 80 MHz are one capture; wider ones are stitched from 40 MS/s
+ * captures 30 MHz apart. LCD_FULL covers 1830-2730 MHz around 2280. */
+static const unsigned lcd_spans[]={16,40,80,160,320,900};
+#define LCD_FULL 5u
+static unsigned lcd_mode=1;
+static uint8_t lcd_bins[256],lcd_view[256];
 #endif
 
 /* S2 vendor adctrig uses SRAM at 0x3fff0000 with owner mask 7.
@@ -52,9 +56,12 @@ extern void rom_set_rxclk_en(unsigned);
 #define phy_set_rxclk_en rom_set_rxclk_en
 extern void set_chanfreq(unsigned,unsigned);
 extern void rom_set_rf_freq_offset(unsigned,unsigned,int);
+/* Set while the LCD stitches a wide view: retune the PLL only and keep the
+ * DC calibration from the view centre (~30 ms instead of ~245 ms a step). */
+static bool tune_fast;
 static void s2_tune(unsigned mhz) {
     static unsigned calibrated_mhz;
-    if (calibrated_mhz != mhz || rx_recalibration_stale()) {
+    if (!tune_fast && (calibrated_mhz != mhz || rx_recalibration_stale())) {
         rx_recalibrate(mhz);
         calibrated_mhz = mhz;
     }
@@ -225,12 +232,79 @@ static bool capture(unsigned n,unsigned divider,unsigned format) {
 }
 
 
+#ifdef ESP_SDR_FEATHER_TFT
+/* BOOT button walks the whole tunable range one span at a time and turns
+ * around wherever the VCO search no longer finds a solid window (>=2 codes),
+ * so the ends follow the individual chip. A long hold starts auto-scan,
+ * which dwells LCD_SCAN_DWELL_US per step; a tap while scanning pauses it. */
+#define LCD_SCAN_DWELL_US 6000000
+static int lcd_dir=1;
+static bool lcd_scan;
+static unsigned lcd_key; /* pending button action injected by LCDKEY */
+static unsigned lcd_span(void){return lcd_spans[lcd_mode];}
+static bool lcd_locked(void){return !s2_pll_diag.searched || (s2_pll_diag.ok && s2_pll_diag.best>=2);}
+static bool lcd_try(unsigned mhz) {
+    if(!rx_frequency_valid(mhz))return false;
+    frequency_mhz=mhz;rx_ready=false;prepare_rx();
+    return lcd_locked();
+}
+static void lcd_step(void) {
+    if(lcd_mode==LCD_FULL)return;
+    unsigned from=frequency_mhz,step=lcd_span()/2;
+    for(unsigned turn=0;turn<2;turn++) {
+        if(lcd_try(from+lcd_dir*(int)step))return;
+        lcd_dir=-lcd_dir;
+    }
+    (void)lcd_try(from);
+}
+/* The S2 I/Q spectrum is mirrored (a tone above the LO lands at a negative
+ * bin), so flip it: out[k] holds +k bins in natural FFT order. */
+static void lcd_unmirror(const uint8_t *in,uint8_t *out) {
+    for(unsigned k=0;k<256;k++)out[k]=in[(256-k)&255];
+}
+/* Fill lcd_view (natural order, 256 bins) for the current mode. Returns
+ * the centre frequency to label. Unlocked segments stay blank. */
+static bool lcd_capture(unsigned *centre) {
+    unsigned span=lcd_span();
+    if(span<=80) {
+        *centre=frequency_mhz;
+        if(!spectrum_snapshot(256,span==80?0:span==40?1:6,spectrum_acquire,lcd_bins))return false;
+        lcd_unmirror(lcd_bins,lcd_view);
+        return true;
+    }
+    unsigned keep=frequency_mhz,mid=lcd_mode==LCD_FULL?2280:keep,lo=mid-span/2;
+    uint8_t wide[256];memset(wide,0,sizeof(wide));
+    tune_fast=true;
+    for(unsigned seg=lo+15;seg<lo+span;seg+=30) {
+        frequency_mhz=seg;rx_ready=false;
+        if(!spectrum_snapshot(256,1,spectrum_acquire,lcd_bins) || !lcd_locked())continue;
+        uint8_t good[256];lcd_unmirror(lcd_bins,good);
+        /* 0.15625 MHz per bin; keep the flat +/-15 MHz, skip the DC bins. */
+        for(int d=-96;d<96;d++) {
+            if(d>=-1 && d<=1)continue;
+            int khz=(int)(seg-lo)*1000+d*156;
+            if(khz<0 || khz>=(int)span*1000)continue;
+            unsigned col=(unsigned)khz*256u/(span*1000u);
+            uint8_t v=good[(unsigned)d&255];
+            if(v>wide[col])wide[col]=v;
+        }
+    }
+    tune_fast=false;
+    frequency_mhz=keep;rx_ready=false;
+    for(unsigned k=0;k<256;k++)lcd_view[k]=wide[(k+128)&255];
+    *centre=mid;
+    return true;
+}
+#endif
+
 static void handle_command(char *line) {
 #ifdef S2_TARGET_TONE_TEST
     if(target_tone_command(line))return;
 #endif
 #ifdef ESP_SDR_FEATHER_TFT
     if(feather_tft_command(line))return;
+    unsigned key;char key_extra;
+    if(sscanf(line,"LCDKEY %u %c",&key,&key_extra)==1 && key>=1 && key<=3){lcd_key=key;reply("OK\n");return;}
 #endif
     if (burst_version_command(line)) return;
     if (burst_gpio_command(line)) return;
@@ -355,7 +429,7 @@ void app_main(void) {
     burst_serial_init();
 #ifdef ESP_SDR_FEATHER_TFT
     feather_tft_init();
-    int64_t lcd_next=0;
+    int64_t lcd_next=0,scan_next=0;
 #endif
     char line[128];
     int owner=-1;
@@ -369,13 +443,20 @@ void app_main(void) {
              * sampling pauses while a serial client holds the radio lease. */
             if(owner<0) {
                 unsigned action=feather_tft_button();
-                if(action==1) {
-                    frequency_mhz=frequency_mhz>=2472 || frequency_mhz<2412?2412:frequency_mhz+5;
-                    rx_ready=false;
-                } else if(action>=2)lcd_rate=lcd_rate==1?0:lcd_rate==0?6:1;
+                if(!action && lcd_key){action=lcd_key;lcd_key=0;}
+                if(action==1 && lcd_scan)lcd_scan=false;
+                else if(action==1)lcd_step();
+                else if(action==2)lcd_mode=(lcd_mode+1)%(sizeof(lcd_spans)/sizeof(lcd_spans[0]));
+                else if(action==3){lcd_scan=!lcd_scan;scan_next=esp_timer_get_time()+LCD_SCAN_DWELL_US;}
+                if(lcd_scan && esp_timer_get_time()>=scan_next) {
+                    lcd_step();scan_next=esp_timer_get_time()+LCD_SCAN_DWELL_US;
+                }
                 if(esp_timer_get_time()>=lcd_next) {
-                    if(spectrum_snapshot(256,lcd_rate,spectrum_acquire,lcd_bins))
-                        feather_tft_draw(lcd_bins,256,frequency_mhz,lcd_rate==0?80:lcd_rate==1?40:16);
+                    char footer[48];
+                    if(lcd_scan)snprintf(footer,sizeof(footer),"SCAN %s / TAP PAUSE / HOLD SPAN",lcd_dir>0?"UP":"DN");
+                    else snprintf(footer,sizeof(footer),"TAP STEP %s / HOLD SPAN / LONG SCAN",lcd_dir>0?"UP":"DN");
+                    unsigned centre=frequency_mhz;
+                    if(lcd_capture(&centre))feather_tft_draw(lcd_view,256,centre,lcd_span(),footer);
                     lcd_next=esp_timer_get_time()+100000;
                 }
             }
@@ -393,7 +474,7 @@ void app_main(void) {
             handle_command(line);
             /* Display and bounded tone controls resume local sampling as soon
              * as their reply finishes; they don't consume the RF lease. */
-            if(!strncmp(line,"TXTONE ",7) || !strcmp(line,"LCD?") || !strcmp(line,"LCDSHOT"))owner=-1;
+            if(!strncmp(line,"TXTONE ",7) || !strncmp(line,"LCD",3))owner=-1;
         }
         /* Ownership covers the entire binary transaction. Silence releases it
          * after five seconds. */

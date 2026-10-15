@@ -115,7 +115,7 @@ static uint16_t heat(unsigned v) {
     if(v<192)return (((v-128)*31/64)<<11)|(63<<5)|(31-(v-128)*31/64);
     return (31<<11)|((63-(v-192)*63/63)<<5);
 }
-void feather_tft_draw(const uint8_t *bins,unsigned n,unsigned mhz,unsigned span_mhz) {
+void feather_tft_draw(const uint8_t *bins,unsigned n,unsigned mhz,unsigned span_mhz,const char *footer) {
     if(!lcd || !bins || !n)return;
     int64_t now=esp_timer_get_time();
     if(now-last_draw<100000)return;
@@ -152,7 +152,7 @@ void feather_tft_draw(const uint8_t *bins,unsigned n,unsigned mhz,unsigned span_
     snprintf(s,sizeof(s),"%u",mhz-span_mhz/2);text(2,81,s,1,WHITE);
     snprintf(s,sizeof(s),"%u",mhz);text(112,81,s,1,WHITE);
     snprintf(s,sizeof(s),"%u",mhz+span_mhz/2);text(220,81,s,1,WHITE);
-    text(4,128,"TAP CHANNEL / HOLD SPAN",1,WHITE);
+    text(4,128,footer?footer:"",1,WHITE);
     flush();frames++;
 }
 unsigned feather_tft_button(void) {

@@ -32,6 +32,23 @@ LOLIN S2 Mini (tone source). The firmware accepts `FREQ` from 100 to
 - Below about 2.1 GHz, received tone level drops (≈48 dB above the noise at 2100 MHz,
   ≈25 dB at 1850 MHz). Use RX gain 50 there; gain 30 missed the tone.
 
+## Feather LCD controls
+
+The LCD runs whenever no host holds the radio (send `RELEASE`, or wait 5 s).
+
+| BOOT button | Action |
+|---|---|
+| Tap | Step half a span in the current direction. At a frequency where the PLL can't lock solidly (fewer than 2 good capacitor codes), turn around and walk back. While scanning, a tap pauses the scan. |
+| Hold (0.6 s) | Next span: 16 → 40 → 80 → 160 → 320 → FULL (1830–2730 MHz) |
+| Long hold (1.5 s) | Start or stop auto-scan, which dwells 6 s per step and sweeps up and down |
+
+Spans up to 80 MHz are a single capture (16/40/80 MS/s). Wider spans are
+stitched from 40 MS/s captures 30 MHz apart, keeping the flat ±15 MHz of
+each. They retune the PLL only and reuse the centre's DC calibration
+(~30 ms per step instead of ~245 ms). Segments that can't lock stay blank.
+Measured frame rates: 7.6/s at 40 MHz, 4.6/s at 160 MHz, 1.6/s at FULL.
+`LCDKEY 1|2|3` injects a tap, hold or long hold over serial.
+
 ## Firmware commands used
 
 | Command | Board | Effect |
