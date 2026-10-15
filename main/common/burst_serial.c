@@ -187,7 +187,9 @@ size_t burst_serial_try_send(const void *data, size_t size) {
             sent=usb_serial_jtag_ll_write_txfifo(p+done,size-done>64?64:size-done);
             usb_serial_jtag_ll_txfifo_flush();
 #elif CONFIG_IDF_TARGET_ESP32S2
-            sent=esp_usb_console_write_buf((const char *)p+done,size-done>64?64:size-done);
+            /* ROM CDC has no explicit ZLP API. Short packets make macOS
+             * deliver even payloads whose size is a multiple of 64 bytes. */
+            sent=esp_usb_console_write_buf((const char *)p+done,size-done>63?63:size-done);
             if(sent>0)esp_usb_console_flush();
 #endif
         }
@@ -215,7 +217,7 @@ bool IRAM_ATTR burst_serial_send(const void *data, size_t size) {
             usb_serial_jtag_ll_txfifo_flush();
 #elif CONFIG_IDF_TARGET_ESP32S2
 
-            sent=esp_usb_console_write_buf((const char *)p,size>64?64:size);
+            sent=esp_usb_console_write_buf((const char *)p,size>63?63:size);
             if(sent<0)return false;
             if(!sent)taskYIELD();
             else esp_usb_console_flush();

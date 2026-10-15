@@ -33,7 +33,10 @@ if(NOT IDF_TARGET STREQUAL "esp32s3")
 endif()
 
 if(IDF_TARGET STREQUAL "esp32s2")
-    list(APPEND dependencies esp_usb_cdc_rom_console)
+    list(APPEND dependencies esp_usb_cdc_rom_console esp_driver_spi)
+    if(ESP_SDR_FEATHER_TFT)
+        list(APPEND sources "targets/esp32s2/feather_tft.c")
+    endif()
     list(APPEND probes S2_RF_PROBE)
 elseif(NOT IDF_TARGET STREQUAL "esp32" AND NOT IDF_TARGET STREQUAL "esp32c2")
     list(APPEND dependencies esp_driver_usb_serial_jtag)
@@ -66,6 +69,15 @@ idf_component_register(SRCS "${receiver}" ${sources}
     LDFRAGMENTS ${fragments}
     PRIV_INCLUDE_DIRS "common" ${target_includes} "diagnostics"
     REQUIRES ${dependencies})
+if(IDF_TARGET STREQUAL "esp32s2" AND ESP_SDR_FEATHER_TFT)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE ESP_SDR_FEATHER_TFT=1)
+endif()
+if(S2_TARGET_TONE_TEST)
+    if(NOT IDF_TARGET STREQUAL "esp32s2")
+        message(FATAL_ERROR "S2_TARGET_TONE_TEST requires ESP32-S2")
+    endif()
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE S2_TARGET_TONE_TEST=1)
+endif()
 
 # Regenerate at build time (not only CMake configure time). The embedded record
 # is also the artifact exporter's source of revision and UTC build time.

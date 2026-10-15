@@ -35,6 +35,9 @@ static uint64_t excluded_pins(void) {
     uint64_t mask = PINS(15, 21);
 #elif CONFIG_IDF_TARGET_ESP32S2
     uint64_t mask = PINS(26, 32);
+#ifdef ESP_SDR_FEATHER_TFT
+    mask |= PIN(0) | PIN(7) | PIN(21) | PIN(35) | PIN(36) | PIN(39) | PIN(40) | PIN(45);
+#endif
 #elif CONFIG_IDF_TARGET_ESP32S3
     uint64_t mask = PINS(26, 37);
 #elif CONFIG_IDF_TARGET_ESP32S31

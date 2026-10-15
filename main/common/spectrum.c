@@ -120,6 +120,31 @@ static size_t pack_spectrum(unsigned n,unsigned log2n,unsigned det,unsigned merg
     return HEADER_BYTES+n+4;
 }
 
+static void snapshot_poll(void *context) {(void)context;}
+bool spectrum_snapshot(unsigned n, unsigned rate, spectrum_acquire_fn acquire, uint8_t *bins) {
+    if(!bins || !acquire || n<256 || n>MAX_FFT || (n&(n-1)) || !rate_hz(rate) || !spectrum_fft_init())return false;
+    if(setup_n!=n) {
+        for(unsigned j=0;j<n;j++)window[j]=(int16_t)lrintf(16383.5f*(1-cosf(2*M_PI*j/n)));
+        setup_n=n;
+    }
+    const uint32_t *words;unsigned elapsed;
+    if(!acquire(n,rate,&words,&elapsed))return false;
+    for(unsigned j=0;j<n;j++) {
+        int32_t i=((int32_t)(words[j]<<22)>>22),q=((int32_t)(words[j]<<12)>>22);
+        fft_data[2*j]=clamp16((i*window[j])>>9);
+        fft_data[2*j+1]=clamp16((q*window[j])>>9);
+    }
+    spectrum_fft_poll(fft_data,n,dsps_fft_w_table_sc16,snapshot_poll,NULL);
+    spectrum_dc_t dc={0};spectrum_dc_apply(&dc,fft_data,n);
+    for(unsigned j=0,bin=0;j<n;j++) {
+        bins[bin]=spectrum_power_code(spectrum_complex_power(fft_data[2*j],fft_data[2*j+1]));
+        unsigned bit=n>>1;
+        while(bin&bit){bin^=bit;bit>>=1;}
+        bin^=bit;
+    }
+    return true;
+}
+
 bool spectrum_command(const char *line, unsigned frequency_mhz, spectrum_acquire_fn acquire) {
     unsigned dc_mode;char dc_extra;
     if(!strcmp(line,"DC?")){char text[16];snprintf(text,sizeof(text),"DC %u\n",spectrum_dc_mode);send_text(text);return true;}

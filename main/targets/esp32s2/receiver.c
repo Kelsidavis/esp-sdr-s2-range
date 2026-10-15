@@ -26,6 +26,11 @@
 #include "rx_lo.h"
 #include "esp_rom_sys.h"
 #include "pll.h"
+#ifdef ESP_SDR_FEATHER_TFT
+#include "feather_tft.h"
+static unsigned lcd_rate=1;
+static uint8_t lcd_bins[256];
+#endif
 
 /* S2 vendor adctrig uses SRAM at 0x3fff0000 with owner mask 7.
  * Reserve the first three 16 KiB banks and both CPU aliases. Leave the top
@@ -118,6 +123,9 @@ static void prepare_rx(void) {
     rx_ready=true;
 }
 #include "filter_probe.h"
+#ifdef S2_TARGET_TONE_TEST
+#include "target_tone_command.h"
+#endif
 
 static size_t packed_size(unsigned n) { return (n*20u+7u)/8u; }
 /* Two complete IQ10 samples occupy five bytes; an odd tail occupies three. */
@@ -216,6 +224,12 @@ static bool capture(unsigned n,unsigned divider,unsigned format) {
 
 
 static void handle_command(char *line) {
+#ifdef S2_TARGET_TONE_TEST
+    if(target_tone_command(line))return;
+#endif
+#ifdef ESP_SDR_FEATHER_TFT
+    if(feather_tft_command(line))return;
+#endif
     if (burst_version_command(line)) return;
     if (burst_gpio_command(line)) return;
 #ifdef RING_PROBE
@@ -326,13 +340,35 @@ void app_main(void) {
     /* USB may be unplugged when the host uses the UART bridge. */
 
     burst_serial_init();
+#ifdef ESP_SDR_FEATHER_TFT
+    feather_tft_init();
+    int64_t lcd_next=0;
+#endif
     char line[128];
     int owner=-1;
     int64_t lease_deadline=0;
     for(;;) {
         if(esp_timer_get_time()>=lease_deadline)owner=-1;
         int status=burst_serial_poll_line(line,sizeof(line));
-        if(!status){vTaskDelay(1);continue;}
+        if(!status){
+#ifdef ESP_SDR_FEATHER_TFT
+            /* Serialize all RF/FFT operations with host commands. Local
+             * sampling pauses while a serial client holds the radio lease. */
+            if(owner<0) {
+                unsigned action=feather_tft_button();
+                if(action==1) {
+                    frequency_mhz=frequency_mhz>=2472 || frequency_mhz<2412?2412:frequency_mhz+5;
+                    rx_ready=false;
+                } else if(action>=2)lcd_rate=lcd_rate==1?0:lcd_rate==0?6:1;
+                if(esp_timer_get_time()>=lcd_next) {
+                    if(spectrum_snapshot(256,lcd_rate,spectrum_acquire,lcd_bins))
+                        feather_tft_draw(lcd_bins,256,frequency_mhz,lcd_rate==0?80:lcd_rate==1?40:16);
+                    lcd_next=esp_timer_get_time()+100000;
+                }
+            }
+#endif
+            vTaskDelay(1);continue;
+        }
 
         int port=burst_serial_port();
         if(owner>=0 && owner!=port){reply("ERR busy\n");continue;}
@@ -342,6 +378,9 @@ void app_main(void) {
             reply("OK\n");owner=-1;
         } else {
             handle_command(line);
+            /* Display and bounded tone controls resume local sampling as soon
+             * as their reply finishes; they don't consume the RF lease. */
+            if(!strncmp(line,"TXTONE ",7) || !strcmp(line,"LCD?") || !strcmp(line,"LCDSHOT"))owner=-1;
         }
         /* Ownership covers the entire binary transaction. Silence releases it
          * after five seconds. */

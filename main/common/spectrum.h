@@ -8,6 +8,8 @@ typedef bool (*spectrum_acquire_fn)(unsigned n, unsigned rate,
 bool spectrum_command(const char *line, unsigned frequency_mhz, spectrum_acquire_fn acquire);
 
 bool spectrum_fft_init(void);
+/* Single CPU-owned snapshot, natural-frequency order, same codes as SPC1. */
+bool spectrum_snapshot(unsigned n, unsigned rate, spectrum_acquire_fn acquire, uint8_t *bins);
 
 /* Snapshot and continuous backends run exclusively. Reuse their large buffers
  * on SRAM-constrained targets; acquiring this workspace invalidates the cached
