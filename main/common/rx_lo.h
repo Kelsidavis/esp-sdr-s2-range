@@ -12,8 +12,15 @@ typedef struct {
     bool alternate;
 } rx_lo_plan_t;
 
+#if CONFIG_IDF_TARGET_ESP32S2
+/* Diagnostic override set by LOMODE: -1 automatic, 0 direct, 1 divider. */
+extern int rx_lo_force;
+#endif
 static inline rx_lo_plan_t rx_lo_plan(unsigned mhz) {
     bool alternate = mhz >= 1842 && mhz < 2210;
+#if CONFIG_IDF_TARGET_ESP32S2
+    if (rx_lo_force >= 0) alternate = rx_lo_force;
+#endif
     unsigned khz = mhz * (alternate ? 1200u : 1000u);
     return (rx_lo_plan_t){khz / 1000u, (int)(khz % 1000u), alternate};
 }

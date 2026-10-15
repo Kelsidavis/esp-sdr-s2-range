@@ -62,6 +62,7 @@ static void s2_tune(unsigned mhz) {
     rx_lo_select(false);
     bool channel=(mhz>=2412 && mhz<=2472 && (mhz-2412)%5==0)||mhz==2484;
     set_chanfreq(channel?mhz:2412,0);
+    s2_pll_diag.searched=0;
     if(!channel) {
         rom_set_rf_freq_offset(0,plan.mhz,plan.offset_khz);
         (void)s2_pll_calibrate();
@@ -71,6 +72,7 @@ static void s2_tune(unsigned mhz) {
 #define S2_FREQ_MIN RX_FREQ_MIN
 #define S2_FREQ_MAX RX_FREQ_MAX
 static unsigned frequency_mhz=2412;
+int rx_lo_force=-1;
 static bool rx_ready;
 #ifdef S2_RF_PROBE
 static unsigned rx_clock=0;
@@ -306,6 +308,17 @@ static void handle_command(char *line) {
             frequency_mhz=n;rx_ready=false;prepare_rx();reply("OK\n");
         }
 #endif
+        else if(!strcmp(line,"LOMODE AUTO")){rx_lo_force=-1;rx_ready=false;reply("OK\n");}
+        else if(!strcmp(line,"LOMODE DIRECT")){rx_lo_force=0;rx_ready=false;reply("OK\n");}
+        else if(!strcmp(line,"LOMODE DIV")){rx_lo_force=1;rx_ready=false;reply("OK\n");}
+        else if(!strcmp(line,"PLL?")) {
+            char answer[160];
+            snprintf(answer,sizeof(answer),"PLL %u searched=%u ok=%u best=%u cap=%u first=%u last=%u good=%u f4=%u f8=%u status=%02x now=%02x div=%u\n",
+                frequency_mhz,s2_pll_diag.searched,s2_pll_diag.ok,s2_pll_diag.best,s2_pll_diag.cap,
+                s2_pll_diag.first,s2_pll_diag.last,s2_pll_diag.good,s2_pll_diag.flag4,s2_pll_diag.flag8,
+                s2_pll_diag.status,rom_chip_i2c_readReg(0x62,1,12),(unsigned)rx_lo_plan(frequency_mhz).alternate);
+            reply(answer);
+        }
         else if(!strcmp(line,"RANGE?")) {
             char answer[64];snprintf(answer,sizeof(answer),"RANGE %u %u 1\n",S2_FREQ_MIN,S2_FREQ_MAX);reply(answer);
         }
